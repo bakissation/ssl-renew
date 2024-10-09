@@ -5,4 +5,6 @@ RUN apt-get update && \
 RUN pip install docker apscheduler
 WORKDIR /app
 COPY ssl_renew.py /app/ssl_renew.py
+RUN useradd -m appuser
+USER appuser
 CMD ["python", "/app/ssl_renew.py"]

@@ -4,52 +4,68 @@ services:
     image: nginx:alpine
     container_name: nginx_http
     volumes:
-      - ./nginx/nginx.http.conf:/etc/nginx/conf.d/default.conf
-      - ./certbot_data:/var/www/certbot
+      - ./nginx/nginx.http.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot_data:/var/www/certbot
     ports:
       - "80:80"
+    networks:
+      - ssl_network
 
   certbot:
     container_name: certbot
     image: certbot/certbot:latest
     command: >- 
              certonly --webroot --webroot-path=/var/www/certbot
-             --email ${EMAIL} --agree-tos --no-eff-email
-             -d ${DOMAIN} --non-interactive --quiet
+             --email ${EMAIL:-your_email@example.com} --agree-tos --no-eff-email
+             -d ${DOMAIN:-example.com} --non-interactive --quiet
     volumes:
-      - ./letsencrypt:/etc/letsencrypt
-      - ./certbot_data:/var/www/certbot
+      - letsencrypt_data:/etc/letsencrypt
+      - certbot_data:/var/www/certbot
     depends_on:
       - nginx_http
+    networks:
+      - ssl_network
 
   nginx_https:
     image: nginx:alpine
     container_name: nginx_https
     volumes:
-      - ./nginx/nginx.https.conf:/etc/nginx/conf.d/default.conf
-      - ./nginx/proxy_params:/etc/nginx/proxy_params
-      - ./letsencrypt:/etc/letsencrypt
-      - ./ssl-dhparams.pem:/etc/letsencrypt/ssl-dhparams.pem
+      - ./nginx/nginx.https.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/proxy_params:/etc/nginx/proxy_params:ro
+      - letsencrypt_data:/etc/letsencrypt:ro
+      - ./ssl-dhparams.pem:/etc/letsencrypt/ssl-dhparams.pem:ro
     ports:
       - "443:443"
     depends_on:
       - certbot
+    networks:
+      - ssl_network
 
   docker_ssl_manager:
     build:
       context: .
       dockerfile: Dockerfile
     environment:
-      - EMAIL=${EMAIL}
-      - DOMAIN=${DOMAIN}
-      - RENEW_MINUTE=${RENEW_MINUTE}
-      - RENEW_HOUR=${RENEW_HOUR}
-      - RENEW_DAY=${RENEW_DAY}
-      - RENEW_MONTH=${RENEW_MONTH}
-      - RENEW_DAY_OF_WEEK=${RENEW_DAY_OF_WEEK}
+      - EMAIL=${EMAIL:-your_email@example.com}
+      - DOMAIN=${DOMAIN:-example.com}
+      - RENEW_MINUTE=${RENEW_MINUTE:-0}
+      - RENEW_HOUR=${RENEW_HOUR:-3}
+      - RENEW_DAY=${RENEW_DAY:-1}
+      - RENEW_MONTH=${RENEW_MONTH:-*}
+      - RENEW_DAY_OF_WEEK=${RENEW_DAY_OF_WEEK:-*}
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./certbot_data:/var/www/certbot
-      - ./letsencrypt:/etc/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - certbot_data:/var/www/certbot
+      - letsencrypt_data:/etc/letsencrypt
     depends_on:
       - nginx_https
+    networks:
+      - ssl_network
+
+volumes:
+  certbot_data:
+  letsencrypt_data:
+
+networks:
+  ssl_network:
+    driver: bridge

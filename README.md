@@ -1,17 +1,52 @@
-# SSL Certificate Renewal Documentation for fatoura.app
+# Automated SSL Certificate Renewal System for fatoura.app
 
 ## Overview
 
-This document outlines the automated SSL certificate renewal process for the domain fatoura.app. The system uses Docker, Nginx, Certbot, and a custom Python script to manage and automate the renewal process.
+This project provides an automated SSL certificate renewal system for the domain fatoura.app. It uses Docker, Nginx, Certbot, and a custom Python script to manage and automate the SSL certificate renewal process.
 
 ## System Components
 
-1. **Nginx**: Web server handling HTTP and HTTPS traffic
-2. **Certbot**: Tool for obtaining and renewing Let's Encrypt SSL certificates
-3. **Docker**: Containerization platform for running services
-4. **Python Script**: Custom script (`ssl_renew.py`) for scheduling and managing renewals
+1. Nginx: Web server handling HTTP and HTTPS traffic
+2. Certbot: Tool for obtaining and renewing Let's Encrypt SSL certificates
+3. Docker: Containerization platform for running services
+4. Python Script: Custom script (ssl_renew.py) for scheduling and managing renewals
 
-## Docker Services
+## Prerequisites
+
+- Docker and Docker Compose installed on your system
+- A registered domain name (fatoura.app in this case)
+- Port 80 and 443 open on your server
+
+## Initial Setup
+
+1. Clone this repository:
+
+
+git clone https://github.com/yourusername/ssl-renewal.git
+cd ssl-renewal
+
+
+1. Copy the example environment file and edit it with your specific details:
+
+
+cp .env.example .env
+nano .env
+
+Fill in your email address, domain name, and adjust the renewal schedule if needed.
+
+3. Build and start the Docker containers:
+
+
+docker-compose up -d
+
+
+4. Verify that all containers are running:
+
+
+docker-compose ps
+
+
+## System Architecture
 
 The system consists of four main Docker services:
 
@@ -22,14 +57,14 @@ The system consists of four main Docker services:
 
 ## Configuration Files
 
-1. `compose.yaml`: Docker Compose configuration
-2. `nginx.http.conf`: Nginx configuration for HTTP
-3. `nginx.https.conf`: Nginx configuration for HTTPS
-4. `ssl_renew.py`: Python script for automated renewals
-5. `Dockerfile`: For building the docker_ssl_manager service
-6. `proxy_params`: Nginx proxy parameters
+- `compose.yaml`: Docker Compose configuration
+- `nginx/nginx.http.conf`: Nginx configuration for HTTP
+- `nginx/nginx.https.conf`: Nginx configuration for HTTPS
+- `ssl_renew.py`: Python script for automated renewals
+- `Dockerfile`: For building the docker_ssl_manager service
+- `nginx/proxy_params`: Nginx proxy parameters
 
-## Renewal Process
+## SSL Renewal Process
 
 ### Initial Certificate Obtainment
 
@@ -37,121 +72,76 @@ The system consists of four main Docker services:
 2. The `certbot` service runs and obtains the initial SSL certificate for fatoura.app.
 3. The `nginx_https` service starts using the obtained certificates.
 
-### Automated Monthly Renewal
+### Automated Renewal
 
 1. The `docker_ssl_manager` service runs the `ssl_renew.py` script.
-2. The script is scheduled to run monthly (configurable via environment variables).
+2. The script is scheduled to run based on the cron-like schedule defined in the .env file.
 3. When executed, the script:
-   a. Runs Certbot to renew the certificate
-   b. Restarts the `nginx_https` container to use the new certificate
+a. Runs Certbot to renew the certificate
+b. Restarts the `nginx_https` container to use the new certificate
 
-## Detailed Component Breakdown
+## Manual Certificate Renewal
 
-### Nginx HTTP Configuration (`nginx.http.conf`)
+To manually trigger a certificate renewal:
 
-```nginx
-server {
-    listen 80;
-    server_name fatoura.app;
+1. Run the certbot container:
 
-    location /.well-known/acme-challenge {
-        allow all;
-        root /var/www/certbot;
-    }
 
-    location / {
-        return 301 https://$host$request_uri;
-    }
-}
-```
+docker-compose run --rm certbot
 
-This configuration:
-- Listens on port 80
-- Serves ACME challenges for certificate validation
-- Redirects all other traffic to HTTPS
+2. Restart the nginx_https container:
 
-### Nginx HTTPS Configuration (`nginx.https.conf`)
 
-```nginx
-server {
-    listen 443 ssl;
-    server_name fatoura.app;
-    ssl_certificate /etc/letsencrypt/live/fatoura.app/fullchain.pem; 
-    ssl_certificate_key /etc/letsencrypt/live/fatoura.app/privkey.pem; 
+docker-compose restart nginx_https
 
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
-
-    location /socket.io/ {
-        include /etc/nginx/proxy_params;
-        proxy_pass http://web:5000/socket.io/;
-    }
-
-    location / {
-        include /etc/nginx/proxy_params;
-        proxy_pass http://web:5000;
-    }
-}
-```
-
-This configuration:
-- Listens on port 443 with SSL
-- Uses the Let's Encrypt certificates
-- Includes additional SSL options and parameters
-- Proxies requests to a backend service (assumed to be running on web:5000)
-
-### SSL Renewal Script (`ssl_renew.py`)
-
-The Python script performs the following tasks:
-1. Schedules the renewal process based on environment variables
-2. Executes Certbot to renew the certificate
-3. Restarts the Nginx HTTPS container to apply the new certificate
-
-### Docker Compose Configuration (`compose.yaml`)
-
-The Docker Compose file defines four services:
-1. `nginx_http`: For HTTP traffic and ACME challenges
-2. `certbot`: For obtaining and renewing certificates
-3. `nginx_https`: For HTTPS traffic
-4. `docker_ssl_manager`: For running the renewal script
-
-## Renewal Schedule
-
-The renewal is scheduled using the following environment variables:
-- `RENEW_MINUTE`
-- `RENEW_HOUR`
-- `RENEW_DAY`
-- `RENEW_MONTH`
-- `RENEW_DAY_OF_WEEK`
-
-These can be adjusted in the `.env` file to change the renewal schedule.
 
 ## Monitoring and Maintenance
 
-1. **Logs**: Check Docker logs for each service to monitor the renewal process:
-   ```
-   docker-compose logs nginx_http
-   docker-compose logs certbot
-   docker-compose logs nginx_https
-   docker-compose logs docker_ssl_manager
-   ```
+1. Check Docker logs for each service:
 
-2. **Manual Renewal**: To manually trigger a renewal:
-   ```
-   docker-compose run --rm certbot
-   docker-compose restart nginx_https
-   ```
 
-3. **Certificate Expiry**: Monitor the expiration date of your certificate:
-   ```
-   echo | openssl s_client -servername fatoura.app -connect fatoura.app:443 2>/dev/null | openssl x509 -noout -dates
-   ```
+docker-compose logs nginx_http
+docker-compose logs certbot
+docker-compose logs nginx_https
+docker-compose logs docker_ssl_manager
+
+
+2. Monitor the expiration date of your certificate:
+
+
+echo | openssl s_client -servername fatoura.app -connect fatoura.app:443 2>/dev/null | openssl x509 -noout -dates
+
 
 ## Troubleshooting
 
-1. If renewals fail, check Certbot logs for error messages.
+1. If renewals fail, check Certbot logs for error messages:
+
+
+docker-compose logs certbot
+
 2. Ensure that port 80 is accessible for ACME challenges.
 3. Verify that all environment variables are correctly set in the `.env` file.
 4. Check that the domain DNS is correctly pointing to your server's IP address.
+5. If the `docker_ssl_manager` service is failing, check its logs:
 
-By following this documentation, the SSL certificate for fatoura.app should be automatically renewed each month, ensuring continuous HTTPS support for your domain.
+
+docker-compose logs docker_ssl_manager
+
+
+## Security Considerations
+
+- The system uses named volumes for persistent data storage.
+- A custom Docker network isolates the services.
+- The Nginx configurations use environment variables to avoid hardcoding sensitive information.
+- The SSL renewal script runs as a non-root user for improved security.
+
+## Customization
+
+- To change the renewal schedule, edit the cron-like parameters in the `.env` file.
+- To add or modify Nginx server blocks, edit the `nginx/nginx.http.conf` and `nginx/nginx.https.conf` files.
+
+## Contributing
+
+Contributions to improve the system are welcome. Please submit a pull request or open an issue to discuss proposed changes.
+
+## License
