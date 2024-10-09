@@ -1,0 +1,55 @@
+version: '3.8'
+services:
+  nginx_http:
+    image: nginx:alpine
+    container_name: nginx_http
+    volumes:
+      - ./nginx/nginx.http.conf:/etc/nginx/conf.d/default.conf
+      - ./certbot_data:/var/www/certbot
+    ports:
+      - "80:80"
+
+  certbot:
+    container_name: certbot
+    image: certbot/certbot:latest
+    command: >- 
+             certonly --webroot --webroot-path=/var/www/certbot
+             --email ${EMAIL} --agree-tos --no-eff-email
+             -d ${DOMAIN} --non-interactive --quiet
+    volumes:
+      - ./letsencrypt:/etc/letsencrypt
+      - ./certbot_data:/var/www/certbot
+    depends_on:
+      - nginx_http
+
+  nginx_https:
+    image: nginx:alpine
+    container_name: nginx_https
+    volumes:
+      - ./nginx/nginx.https.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/proxy_params:/etc/nginx/proxy_params
+      - ./letsencrypt:/etc/letsencrypt
+      - ./ssl-dhparams.pem:/etc/letsencrypt/ssl-dhparams.pem
+    ports:
+      - "443:443"
+    depends_on:
+      - certbot
+
+  docker_ssl_manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - EMAIL=${EMAIL}
+      - DOMAIN=${DOMAIN}
+      - RENEW_MINUTE=${RENEW_MINUTE}
+      - RENEW_HOUR=${RENEW_HOUR}
+      - RENEW_DAY=${RENEW_DAY}
+      - RENEW_MONTH=${RENEW_MONTH}
+      - RENEW_DAY_OF_WEEK=${RENEW_DAY_OF_WEEK}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./certbot_data:/var/www/certbot
+      - ./letsencrypt:/etc/letsencrypt
+    depends_on:
+      - nginx_https
