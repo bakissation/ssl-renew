@@ -1,8 +1,8 @@
-# Automated SSL Certificate Renewal System for fatoura.app
+# Automated SSL Certificate Renewal
 
 ## Overview
 
-This project provides an automated SSL certificate renewal system for the domain fatoura.app. It uses Docker, Nginx, Certbot, and a custom Python script to manage and automate the SSL certificate renewal process.
+This project provides an automated SSL certificate renewal system for a domain. It uses Docker, Nginx, Certbot, and a custom Python script to manage and automate the SSL certificate renewal process.
 
 ## System Components
 
@@ -14,7 +14,7 @@ This project provides an automated SSL certificate renewal system for the domain
 ## Prerequisites
 
 - Docker and Docker Compose installed on your system
-- A registered domain name (fatoura.app in this case)
+- A registered domain name
 - Port 80 and 443 open on your server
 
 ## Initial Setup
@@ -69,7 +69,7 @@ The system consists of four main Docker services:
 ### Initial Certificate Obtainment
 
 1. The `nginx_http` service starts and listens on port 80.
-2. The `certbot` service runs and obtains the initial SSL certificate for fatoura.app.
+2. The `certbot` service runs and obtains the initial SSL certificate for domain.
 3. The `nginx_https` service starts using the obtained certificates.
 
 ### Automated Renewal
@@ -109,7 +109,7 @@ docker-compose logs docker_ssl_manager
 2. Monitor the expiration date of your certificate:
 
 
-echo | openssl s_client -servername fatoura.app -connect fatoura.app:443 2>/dev/null | openssl x509 -noout -dates
+echo | openssl s_client -servername {domain} -connect {domain}:443 2>/dev/null | openssl x509 -noout -dates
 
 
 ## Troubleshooting
