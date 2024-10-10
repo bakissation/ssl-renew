@@ -21,30 +21,31 @@ This project provides an automated SSL certificate renewal system for a domain. 
 
 1. Clone this repository:
 
-
+```bash
 git clone https://github.com/yourusername/ssl-renewal.git
 cd ssl-renewal
-
+```
 
 1. Copy the example environment file and edit it with your specific details:
 
-
+```bash
 cp .env.example .env
 nano .env
+```
 
-Fill in your email address, domain name, and adjust the renewal schedule if needed.
+Fill in your email address, domain names, and adjust the renewal schedules if needed.
 
 3. Build and start the Docker containers:
 
-
+```bash
 docker-compose up -d
-
+```
 
 4. Verify that all containers are running:
 
-
+```bash
 docker-compose ps
-
+```
 
 ## System Architecture
 
@@ -86,31 +87,34 @@ To manually trigger a certificate renewal:
 
 1. Run the certbot container:
 
+```bash
 
 docker-compose run --rm certbot
+```
 
 2. Restart the nginx_https container:
 
-
+```bash
 docker-compose restart nginx_https
-
+```
 
 ## Monitoring and Maintenance
 
 1. Check Docker logs for each service:
 
+```bash
 
 docker-compose logs nginx_http
 docker-compose logs certbot
 docker-compose logs nginx_https
 docker-compose logs docker_ssl_manager
-
+```
 
 2. Monitor the expiration date of your certificate:
 
-
+```bash
 echo | openssl s_client -servername {domain} -connect {domain}:443 2>/dev/null | openssl x509 -noout -dates
-
+```
 
 ## Troubleshooting
 
