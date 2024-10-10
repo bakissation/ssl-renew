@@ -1,43 +1,19 @@
 version: '3.8'
 services:
-  nginx_http:
+  nginx:
     image: nginx:alpine
-    container_name: nginx_http
+    container_name: nginx
     volumes:
-      - ./nginx/nginx.http.conf:/etc/nginx/conf.d/default.conf:ro
-      - certbot_data:/var/www/certbot
-    ports:
-      - "80:80"
-    networks:
-      - ssl_network
-
-  certbot:
-    container_name: certbot
-    image: certbot/certbot:latest
-    command: >- 
-             certonly --webroot --webroot-path=/var/www/certbot
-             --email ${EMAIL} --agree-tos --no-eff-email
-             ${DOMAINS} --expand --non-interactive --quiet
-    volumes:
-      - letsencrypt_data:/etc/letsencrypt
-      - certbot_data:/var/www/certbot
-    depends_on:
-      - nginx_http
-    networks:
-      - ssl_network
-
-  nginx_https:
-    image: nginx:alpine
-    container_name: nginx_https
-    volumes:
-      - ./nginx/nginx.https.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/options-ssl-nginx.conf:/etc/nginx/options-ssl-nginx.conf:ro
       - ./nginx/proxy_params:/etc/nginx/proxy_params:ro
+      - certbot_data:/var/www/certbot
       - letsencrypt_data:/etc/letsencrypt:ro
       - dhparam_data:/etc/ssl/certs
     ports:
+      - "80:80"
       - "443:443"
-    depends_on:
-      - certbot
     networks:
       - ssl_network
 
@@ -64,7 +40,7 @@ services:
       - letsencrypt_data:/etc/letsencrypt
       - dhparam_data:/etc/ssl/certs
     depends_on:
-      - nginx_https
+      - nginx
     networks:
       - ssl_network
 
