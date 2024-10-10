@@ -72,11 +72,11 @@ def renew_ssl(domain):
 def restart_nginx():
     try:
         client = docker.from_env()
-        container = client.containers.get('nginx_https')
+        container = client.containers.get('nginx')
         container.restart()
         logging.info(f"Nginx container restarted successfully")
     except docker.errors.NotFound:
-        logging.error("Nginx container 'nginx_https' not found")
+        logging.error("Nginx container 'nginx' not found")
     except docker.errors.APIError as e:
         logging.error(f"Docker API error while restarting Nginx: {str(e)}")
     except Exception as e:
