@@ -3,6 +3,7 @@ import subprocess
 import logging
 from apscheduler.schedulers.blocking import BlockingScheduler
 import docker
+from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -13,36 +14,33 @@ def get_env_variable(var_name):
     return value
 
 EMAIL = get_env_variable('EMAIL')
-DOMAIN = get_env_variable('DOMAIN')
-RENEW_MINUTE = get_env_variable('RENEW_MINUTE')
-RENEW_HOUR = get_env_variable('RENEW_HOUR')
-RENEW_DAY = get_env_variable('RENEW_DAY')
-RENEW_MONTH = get_env_variable('RENEW_MONTH')
-RENEW_DAY_OF_WEEK = get_env_variable('RENEW_DAY_OF_WEEK')
+DOMAINS = get_env_variable('DOMAINS').split(',')
 
-def renew_ssl_certificate():
+def renew_ssl_certificate(domain):
     try:
         command = [
             'certbot', 'certonly', '--reinstall', '--webroot',
             '--webroot-path=/var/www/certbot', '--email', EMAIL, 
-            '--agree-tos', '--no-eff-email', '-d', DOMAIN, '--force-renewal',
+            '--agree-tos', '--no-eff-email', '-d', domain, '--force-renewal',
             '-v'
         ]
         
-        logging.info(f"Starting SSL certificate renewal process for domain {DOMAIN}...")
+        logging.info(f"Starting SSL certificate renewal process for domain {domain}...")
         result = subprocess.run(command, capture_output=True, text=True)
 
         if result.returncode == 0:
-            logging.info(f"SSL certificate renewal for {DOMAIN} successful:\n{result.stdout}")
+            logging.info(f"SSL certificate renewal for {domain} successful:\n{result.stdout}")
+            return True
         else:
-            logging.error(f"SSL certificate renewal for {DOMAIN} failed:\n{result.stderr}")
+            logging.error(f"SSL certificate renewal for {domain} failed:\n{result.stderr}")
+            return False
         
     except subprocess.SubprocessError as e:
-        logging.error(f"Subprocess error during certificate renewal: {str(e)}")
+        logging.error(f"Subprocess error during certificate renewal for {domain}: {str(e)}")
     except Exception as e:
-        logging.error(f"Unexpected error during certificate renewal: {str(e)}")
-
-    restart_nginx()
+        logging.error(f"Unexpected error during certificate renewal for {domain}: {str(e)}")
+    
+    return False
 
 def restart_nginx():
     client = docker.from_env()
@@ -58,19 +56,58 @@ def restart_nginx():
     except Exception as e:
         logging.error(f"Unexpected error while restarting Nginx: {str(e)}")
 
-def schedule_renewal():
+def check_and_renew_certificate(domain):
+    if should_renew(domain):
+        if renew_ssl_certificate(domain):
+            restart_nginx()
+
+def should_renew(domain):
+    try:
+        cert_path = f"/etc/letsencrypt/live/{domain}/cert.pem"
+        result = subprocess.run(['openssl', 'x509', '-noout', '-dates', '-in', cert_path], 
+                                capture_output=True, text=True)
+        if result.returncode != 0:
+            logging.error(f"Error checking certificate for {domain}: {result.stderr}")
+            return True  # to renew if we can't check the expiration (just in case)
+
+        for line in result.stdout.split('\n'):
+            if line.startswith('notAfter='):
+                expiry_date = datetime.strptime(line.split('=')[1], '%b %d %H:%M:%S %Y %Z')
+                if expiry_date - datetime.now() < timedelta(days=30):
+                    logging.info(f"Certificate for {domain} is due for renewal")
+                    return True
+        
+        logging.info(f"Certificate for {domain} does not need renewal yet")
+        return False
+    except Exception as e:
+        logging.error(f"Error checking renewal for {domain}: {str(e)}")
+        return True  # to renew if there's an error checking
+
+def schedule_renewals():
     scheduler = BlockingScheduler()
-    scheduler.add_job(
-        renew_ssl_certificate,
-        'cron',
-        minute=RENEW_MINUTE,
-        hour=RENEW_HOUR,
-        day=RENEW_DAY,
-        month=RENEW_MONTH,
-        day_of_week=RENEW_DAY_OF_WEEK,
-    )
-    logging.info("SSL renewal scheduler started. Waiting for next scheduled run.")
+    
+    for domain in DOMAINS:
+        domain_prefix = domain.split('.')[0].upper()
+        minute = get_env_variable(f'{domain_prefix}_RENEW_MINUTE')
+        hour = get_env_variable(f'{domain_prefix}_RENEW_HOUR')
+        day = get_env_variable(f'{domain_prefix}_RENEW_DAY')
+        month = get_env_variable(f'{domain_prefix}_RENEW_MONTH')
+        day_of_week = get_env_variable(f'{domain_prefix}_RENEW_DAY_OF_WEEK')
+        
+        scheduler.add_job(
+            check_and_renew_certificate,
+            'cron',
+            args=[domain],
+            minute=minute,
+            hour=hour,
+            day=day,
+            month=month,
+            day_of_week=day_of_week,
+        )
+        logging.info(f"Scheduled renewal for {domain}: {minute} {hour} {day} {month} {day_of_week}")
+    
+    logging.info("SSL renewal scheduler started. Waiting for scheduled runs.")
     scheduler.start()
 
 if __name__ == '__main__':
-    schedule_renewal()
+    schedule_renewals()
